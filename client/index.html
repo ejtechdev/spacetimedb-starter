@@ -1,13 +1,57 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + TS</title>
+    <title>SpacetimeDB Chat</title>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <div class="chat-app">
+        <header>
+          <div class="logo-container">
+            <img src="/vite.svg" class="logo" alt="Vite logo" />
+            <h1>SpacetimeDB Chat</h1>
+          </div>
+          <div class="connection-info">
+            Status: <span id="connection-status">Disconnected</span>
+          </div>
+        </header>
+
+        <main>
+          <div class="user-panel">
+            <h2>Users</h2>
+            <div id="users-list" class="users-list"></div>
+          </div>
+
+          <div class="chat-panel">
+            <div id="message-container" class="message-container"></div>
+
+            <div class="input-container">
+              <input
+                type="text"
+                id="chat-input"
+                placeholder="Type a message..."
+                disabled
+              />
+              <button id="send-button" disabled>Send</button>
+            </div>
+          </div>
+        </main>
+
+        <div class="name-container">
+          <label for="name-input">Your Name:</label>
+          <input
+            type="text"
+            id="name-input"
+            placeholder="Set your name..."
+            disabled
+          />
+          <button id="set-name-button" disabled>Set Name</button>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

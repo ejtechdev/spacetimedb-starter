@@ -1,337 +1,269 @@
-import { Identity } from "@clockworklabs/spacetimedb-sdk";
-import { DbConnection, Message, User } from "./module_bindings";
-import "./style.css";
-import typescriptLogo from "./typescript.svg";
-import viteLogo from "/vite.svg";
+/**
+ * @fileoverview Main entry point for the SpacetimeDB chat client application.
+ * Initializes UI components, sets up event handlers, and manages the connection
+ * to the SpacetimeDB service.
+ */
 
-// --- Configuration ---
-const SPACETIME_DB_HOST = import.meta.env.PROD
-  ? "wss://maincloud.spacetimedb.com"
-  : "ws://localhost:3000";
-const SPACETIME_DB_NAME = "spacetime-starter";
-const MESSAGE_DURATION_MS = 5000;
+import { Identity } from "@clockworklabs/spacetimedb-sdk";
+import { ChatInput, MessageSubmitEvent } from "./components/ChatInput";
+import { ChatMessages } from "./components/ChatMessages";
+import { NameInput, NameSubmitEvent } from "./components/NameInput";
+import { UsersList } from "./components/UsersList";
+import { Constants } from "./config/constants";
+import { User } from "./module_bindings";
+import { dbService } from "./services/spacetimedb-service";
+import "./styles/main.css";
+
+// Import Vite default asset (optional, for demonstration)
+import "/vite.svg";
 
 // --- Global State ---
-let dbConnection: DbConnection | null = null;
-let localIdentity: Identity | null = null;
-let isConnected = false;
+/** Map storing user data, keyed by user identity hex string. */
 let users = new Map<string, User>();
+/** Map storing message history per user, keyed by sender identity hex string. */
 let playerMessages = new Map<string, { text: string; timestamp: number }[]>();
 
-// DOM Elements
-let nameInput: HTMLInputElement;
-let setNameButton: HTMLButtonElement;
-let chatInput: HTMLInputElement;
-let sendButton: HTMLButtonElement;
-let connectionStatusSpan: HTMLElement;
-let messageContainer: HTMLElement;
+// --- UI Component Instances ---
+/** Instance of the UsersList component. */
+let usersList: UsersList;
+/** Instance of the ChatMessages component. */
+let chatMessages: ChatMessages;
+/** Instance of the ChatInput component. */
+let chatInput: ChatInput;
+/** Instance of the NameInput component. */
+let nameInput: NameInput;
+/** HTML element displaying the connection status. */
+let connectionStatusElement: HTMLElement;
 
-// --- SpacetimeDB Event Handlers ---
-const handleUserInsert = (_ctx: any, user: User) => {
-  const userIdHex = user.identity.toHexString();
-  console.log(`User Inserted: ${userIdHex.substring(0, 6)}`);
-  const nextUsers = new Map(users);
-  nextUsers.set(userIdHex, user);
-  users = nextUsers; // Update global state
-  updateUsersList();
-};
+/**
+ * Initializes the application.
+ * - Fetches necessary DOM elements.
+ * - Creates instances of UI components.
+ * - Sets up event handlers for user interactions and database events.
+ * - Initiates the connection to SpacetimeDB.
+ */
+function initializeApp() {
+  console.log("Initializing application...");
 
-const handleUserUpdate = (_ctx: any, oldUser: User, newUser: User) => {
-  const oldUserIdHex = oldUser.identity.toHexString();
-  const newUserIdHex = newUser.identity.toHexString();
-  console.log(
-    `User Updated: ${newUserIdHex.substring(0, 6)} (Online: ${newUser.online})`
-  );
-  const nextUsers = new Map(users);
-  nextUsers.set(newUserIdHex, newUser);
-  if (oldUserIdHex !== newUserIdHex) {
-    nextUsers.delete(oldUserIdHex);
-  }
-  users = nextUsers; // Update global state
-  updateUsersList();
-};
+  // Get DOM elements required by components
+  const messageContainer = document.getElementById("message-container");
+  const usersListContainer = document.getElementById("users-list");
+  const chatInputElement = document.getElementById("chat-input");
+  const chatSendButton = document.getElementById("send-button");
+  const nameInputElement = document.getElementById("name-input");
+  const nameSetButton = document.getElementById("set-name-button");
+  const statusElement = document.getElementById("connection-status");
 
-const handleUserDelete = (_ctx: any, user: User) => {
-  const userIdHex = user.identity.toHexString();
-  console.log(`User Deleted: ${userIdHex.substring(0, 6)}`);
-  const nextUsers = new Map(users);
-  nextUsers.delete(userIdHex);
-  users = nextUsers; // Update global state
-  updateUsersList();
-};
-
-const handleMessageInsert = (_ctx: any, message: Message) => {
-  if (!message.sender) return;
-  const senderHex = message.sender.toHexString();
-  const newMessage = { text: message.text, timestamp: Date.now() };
-
-  const nextMessages = new Map(playerMessages);
-  const currentMessages = nextMessages.get(senderHex) || [];
-  nextMessages.set(senderHex, [...currentMessages, newMessage].slice(-10)); // Keep last 10
-  playerMessages = nextMessages; // Update global state
-
-  // Add message to UI
-  displayMessage(senderHex, newMessage.text);
-
-  // Auto-clear message after duration
-  setTimeout(() => {
-    const cleanupMessages = new Map(playerMessages);
-    const current = cleanupMessages.get(senderHex) || [];
-    const filtered = current.filter(
-      (msg) =>
-        !(
-          msg.timestamp === newMessage.timestamp && msg.text === newMessage.text
-        )
+  // Verify all required elements are found
+  if (
+    !messageContainer ||
+    !usersListContainer ||
+    !chatInputElement ||
+    !chatSendButton ||
+    !nameInputElement ||
+    !nameSetButton ||
+    !statusElement
+  ) {
+    console.error(
+      "Initialization failed: Required DOM elements not found. Check IDs in index.html and main.ts."
     );
-    if (filtered.length > 0) {
-      cleanupMessages.set(senderHex, filtered);
-    } else {
-      cleanupMessages.delete(senderHex);
-    }
-    playerMessages = cleanupMessages; // Update global state
-  }, MESSAGE_DURATION_MS);
-};
-
-// --- SpacetimeDB Connection Logic ---
-function connectToSpacetimeDB() {
-  console.log("Attempting connection...");
-  connectionStatusSpan.textContent = "Connecting...";
-  isConnected = false;
-  localIdentity = null;
-  dbConnection = null; // Clear previous connection if any
-
-  DbConnection.builder()
-    .withUri(SPACETIME_DB_HOST)
-    .withModuleName(SPACETIME_DB_NAME)
-    .withToken(localStorage.getItem("auth_token") || "")
-    .onConnect((conn: DbConnection, identity: Identity, token: string) => {
-      console.log("Connected! ID:", identity.toHexString());
-      dbConnection = conn;
-      localIdentity = identity;
-      isConnected = true;
-      localStorage.setItem("auth_token", token);
-      connectionStatusSpan.textContent = "Connected";
-      updateUIForConnection(true);
-
-      // Register listeners after connection
-      try {
-        if (conn.db?.user) {
-          conn.db.user.onInsert(handleUserInsert);
-          conn.db.user.onUpdate(handleUserUpdate);
-          conn.db.user.onDelete(handleUserDelete);
-          console.log("User listeners attached.");
-        } else {
-          console.warn("conn.db.user not ready on connect?");
-        }
-        if (conn.db?.message) {
-          conn.db.message.onInsert(handleMessageInsert);
-          console.log("Message listener attached.");
-        } else {
-          console.warn("conn.db.message not ready on connect?");
-        }
-      } catch (e) {
-        console.error("Error registering listeners:", e);
-      }
-
-      // Initial subscription
-      conn
-        .subscriptionBuilder()
-        .subscribe(["SELECT * FROM user", "SELECT * FROM message"]);
-    })
-    .onDisconnect(() => {
-      console.log("Disconnected.");
-      isConnected = false;
-      localIdentity = null;
-      connectionStatusSpan.textContent = "Disconnected";
-      updateUIForConnection(false);
-      // Clear local state on disconnect
-      users = new Map();
-      playerMessages = new Map();
-      dbConnection = null; // Ensure connection is cleared
-    })
-    .onConnectError((_ctx, err) => {
-      console.error("Connection Error:", err);
-      isConnected = false;
-      localIdentity = null;
-      connectionStatusSpan.textContent = `Error: ${err.message}`;
-      updateUIForConnection(false);
-      dbConnection = null;
-    })
-    .build();
-}
-
-// --- UI Update Functions ---
-function updateUIForConnection(connected: boolean) {
-  nameInput.disabled = !connected;
-  setNameButton.disabled = !connected;
-  chatInput.disabled = !connected;
-  sendButton.disabled = !connected;
-
-  if (connected && localIdentity) {
-    const localUser = users.get(localIdentity.toHexString());
-    nameInput.value = localUser?.name || ""; // Set initial name if available
+    // Log which elements are missing for easier debugging
+    console.debug({
+      messageContainer,
+      usersListContainer,
+      chatInputElement,
+      chatSendButton,
+      nameInputElement,
+      nameSetButton,
+      statusElement,
+    });
+    return;
   }
-}
+  connectionStatusElement = statusElement; // Assign the found status element
 
-function updateUsersList() {
-  const usersList = document.getElementById("users-list");
-  if (!usersList) return;
+  // Initialize UI components (using the correct IDs)
+  try {
+    usersList = new UsersList("users-list");
+    chatMessages = new ChatMessages("message-container");
+    chatInput = new ChatInput("chat-input", "send-button");
+    nameInput = new NameInput("name-input", "set-name-button");
+  } catch (error) {
+    console.error("Failed to initialize UI components:", error);
+    return;
+  }
 
-  usersList.innerHTML = "";
+  // Initial UI state (inputs disabled until connected)
+  chatInput.setEnabled(false);
+  nameInput.setEnabled(false);
 
-  // Sort users - online first, then by name
-  const sortedUsers = Array.from(users.values()).sort((a, b) => {
-    if (a.online !== b.online) return a.online ? -1 : 1;
-    return (a.name || "") > (b.name || "") ? 1 : -1;
-  });
+  // Setup event handlers
+  setupEventHandlers();
+  setupDatabaseEventHandlers();
 
-  sortedUsers.forEach((user) => {
-    const userEl = document.createElement("div");
-    userEl.className = `user ${user.online ? "online" : "offline"}`;
-
-    // Highlight local user
-    if (
-      localIdentity &&
-      user.identity.toHexString() === localIdentity.toHexString()
-    ) {
-      userEl.classList.add("local-user");
-    }
-
-    const name =
-      user.name || `User ${user.identity.toHexString().substring(0, 6)}`;
-    userEl.innerHTML = `
-      <span class="status-dot"></span>
-      <span class="user-name">${name}</span>
-    `;
-    usersList.appendChild(userEl);
-  });
-}
-
-function displayMessage(senderHex: string, text: string) {
-  const sender = users.get(senderHex);
-  const senderName = sender?.name || `User ${senderHex.substring(0, 6)}`;
-  const isLocalMessage = localIdentity?.toHexString() === senderHex;
-
-  const messageEl = document.createElement("div");
-  messageEl.className = `message ${isLocalMessage ? "local-message" : ""}`;
-  messageEl.innerHTML = `
-    <span class="sender">${senderName}:</span>
-    <span class="text">${text}</span>
-  `;
-
-  messageContainer.appendChild(messageEl);
-  messageContainer.scrollTop = messageContainer.scrollHeight; // Auto-scroll
-}
-
-// --- Setup HTML and Initialize App ---
-function setupUI() {
-  document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
-    <div class="chat-app">
-      <header>
-        <div class="logo-container">
-          <a href="https://vitejs.dev" target="_blank">
-            <img src="${viteLogo}" class="logo" alt="Vite logo" />
-          </a>
-          <a href="https://www.typescriptlang.org/" target="_blank">
-            <img src="${typescriptLogo}" class="logo vanilla" alt="TypeScript logo" />
-          </a>
-          <h1>SpacetimeDB Chat</h1>
-        </div>
-        <div class="connection-info">
-          Status: <span id="connectionStatus">Disconnected</span>
-        </div>
-      </header>
-      
-      <main>
-        <div class="user-panel">
-          <h2>Users</h2>
-          <div id="users-list" class="users-list"></div>
-        </div>
-        
-        <div class="chat-panel">
-          <div id="message-container" class="message-container"></div>
-          
-          <div class="input-container">
-            <input 
-              type="text" 
-              id="chatInput" 
-              placeholder="Type a message..." 
-              disabled
-            />
-            <button id="sendButton" disabled>Send</button>
-          </div>
-        </div>
-      </main>
-      
-      <div class="name-container">
-        <label for="nameInput">Your Name:</label>
-        <input 
-          type="text" 
-          id="nameInput" 
-          placeholder="Set your name..." 
-          disabled
-        />
-        <button id="setNameButton" disabled>Set Name</button>
-      </div>
-    </div>
-  `;
-}
-
-// --- Initialization Code (runs after DOM is ready) ---
-document.addEventListener("DOMContentLoaded", () => {
-  console.log("DOM Ready");
-
-  // Setup UI
-  setupUI();
-
-  // Get DOM elements
-  nameInput = document.getElementById("nameInput") as HTMLInputElement;
-  setNameButton = document.getElementById("setNameButton") as HTMLButtonElement;
-  chatInput = document.getElementById("chatInput") as HTMLInputElement;
-  sendButton = document.getElementById("sendButton") as HTMLButtonElement;
-  connectionStatusSpan = document.getElementById("connectionStatus")!;
-  messageContainer = document.getElementById("message-container")!;
-
-  // Add UI Event Listeners
-  setNameButton.addEventListener("click", () => {
-    const name = nameInput.value.trim();
-    if (isConnected && dbConnection?.reducers?.setName && name) {
-      try {
-        console.log("Sending setName:", name);
-        dbConnection.reducers.setName(name);
-      } catch (e) {
-        console.error("Error sending setName:", e);
-      }
-    } else {
-      console.warn("Cannot set name: Not connected or name empty");
-    }
-  });
-
-  const sendMessage = () => {
-    const text = chatInput.value.trim();
-    if (isConnected && dbConnection?.reducers?.sendMessage && text) {
-      try {
-        console.log("Sending sendMessage:", text);
-        dbConnection.reducers.sendMessage(text);
-        chatInput.value = ""; // Clear input
-        // Keep focus on the chat input after sending
-        chatInput.focus();
-      } catch (e) {
-        console.error("Error sending sendMessage:", e);
-      }
-    }
-  };
-
-  sendButton.addEventListener("click", sendMessage);
-  chatInput.addEventListener("keypress", (event) => {
-    if (event.key === "Enter") {
-      sendMessage();
-    }
-  });
-
-  // Initial UI state
-  updateUIForConnection(false);
-
-  // Start SpacetimeDB connection
+  // Connect to SpacetimeDB
   connectToSpacetimeDB();
-});
+
+  console.log("Application initialized.");
+}
+
+/**
+ * Sets up event listeners for UI component interactions (message sending, name setting).
+ */
+function setupEventHandlers() {
+  chatInput.onSubmit((event: MessageSubmitEvent) => {
+    console.log("Chat input submitted:", event.text);
+    dbService.sendMessage(event.text);
+  });
+
+  nameInput.onSubmit((event: NameSubmitEvent) => {
+    console.log("Name input submitted:", event.name);
+    dbService.setUserName(event.name);
+  });
+}
+
+/**
+ * Sets up event listeners for SpacetimeDB events provided by the `dbService`.
+ * Handles connection status changes, user updates, and new messages.
+ */
+function setupDatabaseEventHandlers() {
+  // Connection events
+  dbService.onConnection((identity: Identity) => {
+    console.log("Connected to SpacetimeDB");
+    connectionStatusElement.textContent = Constants.textLabels.connected;
+
+    // Update UI state
+    chatInput.setEnabled(true);
+    nameInput.setEnabled(true);
+    chatMessages.setCurrentIdentity(identity);
+    usersList.setCurrentIdentity(identity);
+
+    // Populate initial state if needed (e.g., existing users/messages)
+    // This part might need adjustment based on how initial state is handled
+  });
+
+  dbService.onDisconnect(() => {
+    console.log("Disconnected from SpacetimeDB");
+    connectionStatusElement.textContent = Constants.textLabels.disconnected;
+
+    // Update UI state
+    chatInput.setEnabled(false);
+    nameInput.setEnabled(false);
+    chatMessages.setCurrentIdentity(null);
+    usersList.setCurrentIdentity(null);
+
+    // Clear local state
+    users.clear();
+    playerMessages.clear();
+    usersList.updateUsers(users);
+    // Consider clearing chatMessages display as well
+
+    // Attempt to reconnect after a delay
+    console.log("Attempting to reconnect in 5 seconds...");
+    setTimeout(connectToSpacetimeDB, 5000);
+  });
+
+  dbService.onError((error: Error) => {
+    console.error("SpacetimeDB connection error:", error);
+    connectionStatusElement.textContent = `${Constants.textLabels.errorPrefix}${error.message}`;
+
+    // Update UI state
+    chatInput.setEnabled(false);
+    nameInput.setEnabled(false);
+  });
+
+  // User events
+  dbService.onUserInsert((user: User) => {
+    const userIdHex = user.identity.toHexString();
+
+    // Update users map
+    const nextUsers = new Map(users);
+    nextUsers.set(userIdHex, user);
+    users = nextUsers;
+
+    // Update components
+    usersList.updateUsers(users);
+    chatMessages.setUsers(users); // Ensure chat messages can resolve names
+  });
+
+  dbService.onUserUpdate((oldUser: User, newUser: User) => {
+    const oldUserIdHex = oldUser.identity.toHexString();
+    const newUserIdHex = newUser.identity.toHexString();
+    console.log(
+      `User updated: ${newUserIdHex.substring(
+        0,
+        Constants.identity.shortLength
+      )} (Online: ${newUser.online})`
+    );
+
+    // Update users map
+    const nextUsers = new Map(users);
+    nextUsers.set(newUserIdHex, newUser);
+    // If identity somehow changed (shouldn't typically happen for updates),
+    // remove the old one.
+    if (oldUserIdHex !== newUserIdHex) {
+      nextUsers.delete(oldUserIdHex);
+    }
+    users = nextUsers;
+
+    // Update components
+    usersList.updateUsers(users);
+    chatMessages.setUsers(users);
+  });
+
+  dbService.onUserDelete((user: User) => {
+    const userIdHex = user.identity.toHexString();
+    console.log(
+      `User deleted: ${userIdHex.substring(0, Constants.identity.shortLength)}`
+    );
+
+    // Update users map
+    const nextUsers = new Map(users);
+    nextUsers.delete(userIdHex);
+    users = nextUsers;
+
+    // Update components
+    usersList.updateUsers(users);
+    chatMessages.setUsers(users);
+  });
+
+  // Message events
+  dbService.onMessageInsert((message) => {
+    if (!message.sender) {
+      console.warn("Received message without sender identity.");
+      return;
+    }
+
+    const senderHex = message.sender.toHexString();
+    // Convert SpacetimeDB Timestamp (microseconds) to JS Timestamp (milliseconds)
+    const messageTimestamp = message.sent
+      ? Math.floor(Number(message.sent.microsSinceUnixEpoch) / 1000)
+      : Date.now(); // Fallback to current time if sent timestamp is missing
+
+    const newMessage = {
+      text: message.text,
+      timestamp: messageTimestamp,
+    };
+
+    // Store in message history (optional, could be simplified if not needed)
+    const nextMessages = new Map(playerMessages);
+    const currentMessages = nextMessages.get(senderHex) || [];
+    nextMessages.set(senderHex, [...currentMessages, newMessage]);
+    playerMessages = nextMessages;
+
+    // Add to chat display
+    chatMessages.addMessage(senderHex, message.text, messageTimestamp);
+  });
+}
+
+/**
+ * Initiates the connection process using the `dbService`.
+ * Updates the connection status UI element.
+ */
+function connectToSpacetimeDB() {
+  console.log("Connecting to SpacetimeDB...");
+  connectionStatusElement.textContent = Constants.textLabels.connecting;
+  dbService.connect();
+}
+
+// --- Application Start ---
+document.addEventListener("DOMContentLoaded", initializeApp);
