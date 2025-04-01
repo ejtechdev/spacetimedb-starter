@@ -1,23 +1,32 @@
 /**
- * Application-wide constants that don't change based on environment
+ * @fileoverview Application-wide constants that do not change based on environment.
  */
 
+/**
+ * Collection of fixed constants used throughout the application.
+ */
 export const Constants = {
-  // UI text
+  /** UI text labels */
   textLabels: {
+    /** Text shown while connecting. */
     connecting: "Connecting...",
+    /** Text shown when connected. */
     connected: "Connected",
+    /** Text shown when disconnected. */
     disconnected: "Disconnected",
+    /** Prefix for error messages. */
     errorPrefix: "Error: ",
   },
 
-  // Time constants (in milliseconds)
+  /** Time constants in milliseconds */
   time: {
+    /** Default duration for CSS animations/transitions. */
     animationDuration: 300,
   },
 
-  // Identity display
+  /** Identity display settings */
   identity: {
-    shortLength: 6, // Number of characters to display for shortened identity
+    /** Number of characters to display for a shortened identity hex string. */
+    shortLength: 6,
   },
 };

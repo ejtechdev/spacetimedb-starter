@@ -1,131 +1,178 @@
-import { ChatInput } from "./components/ChatInput";
+/**
+ * @fileoverview Main entry point for the SpacetimeDB chat client application.
+ * Initializes UI components, sets up event handlers, and manages the connection
+ * to the SpacetimeDB service.
+ */
+
+import { Identity } from "@clockworklabs/spacetimedb-sdk";
+import { ChatInput, MessageSubmitEvent } from "./components/ChatInput";
 import { ChatMessages } from "./components/ChatMessages";
-import { NameInput } from "./components/NameInput";
+import { NameInput, NameSubmitEvent } from "./components/NameInput";
 import { UsersList } from "./components/UsersList";
 import { Constants } from "./config/constants";
 import { User } from "./module_bindings";
 import { dbService } from "./services/spacetimedb-service";
 import "./styles/main.css";
 
-// Import assets
+// Import Vite default asset (optional, for demonstration)
 import "/vite.svg";
 
-// Global state
+// --- Global State ---
+/** Map storing user data, keyed by user identity hex string. */
 let users = new Map<string, User>();
+/** Map storing message history per user, keyed by sender identity hex string. */
 let playerMessages = new Map<string, { text: string; timestamp: number }[]>();
 
-// UI Components
+// --- UI Component Instances ---
+/** Instance of the UsersList component. */
 let usersList: UsersList;
+/** Instance of the ChatMessages component. */
 let chatMessages: ChatMessages;
+/** Instance of the ChatInput component. */
 let chatInput: ChatInput;
+/** Instance of the NameInput component. */
 let nameInput: NameInput;
+/** HTML element displaying the connection status. */
 let connectionStatusElement: HTMLElement;
 
 /**
- * Application initialization
+ * Initializes the application.
+ * - Fetches necessary DOM elements.
+ * - Creates instances of UI components.
+ * - Sets up event handlers for user interactions and database events.
+ * - Initiates the connection to SpacetimeDB.
  */
 function initializeApp() {
-  console.log("Initializing SpacetimeDB Chat application");
+  console.log("Initializing application...");
 
-  // Get UI elements
-  connectionStatusElement = document.getElementById(
-    "connectionStatus"
-  ) as HTMLElement;
+  // Get DOM elements required by components
+  const messageContainer = document.getElementById("message-container");
+  const usersListContainer = document.getElementById("users-list");
+  const chatInputElement = document.getElementById("chat-input");
+  const chatSendButton = document.getElementById("send-button");
+  const nameInputElement = document.getElementById("name-input");
+  const nameSetButton = document.getElementById("set-name-button");
+  const statusElement = document.getElementById("connection-status");
 
-  if (!connectionStatusElement) {
-    console.error("Required DOM elements not found");
+  // Verify all required elements are found
+  if (
+    !messageContainer ||
+    !usersListContainer ||
+    !chatInputElement ||
+    !chatSendButton ||
+    !nameInputElement ||
+    !nameSetButton ||
+    !statusElement
+  ) {
+    console.error(
+      "Initialization failed: Required DOM elements not found. Check IDs in index.html and main.ts."
+    );
+    // Log which elements are missing for easier debugging
+    console.debug({
+      messageContainer,
+      usersListContainer,
+      chatInputElement,
+      chatSendButton,
+      nameInputElement,
+      nameSetButton,
+      statusElement,
+    });
+    return;
+  }
+  connectionStatusElement = statusElement; // Assign the found status element
+
+  // Initialize UI components (using the correct IDs)
+  try {
+    usersList = new UsersList("users-list");
+    chatMessages = new ChatMessages("message-container");
+    chatInput = new ChatInput("chat-input", "send-button");
+    nameInput = new NameInput("name-input", "set-name-button");
+  } catch (error) {
+    console.error("Failed to initialize UI components:", error);
     return;
   }
 
-  // Initialize UI components
-  usersList = new UsersList("users-list");
-  chatMessages = new ChatMessages("message-container");
-  chatInput = new ChatInput("chatInput", "sendButton");
-  nameInput = new NameInput("nameInput", "setNameButton");
-
-  // Disable inputs initially
+  // Initial UI state (inputs disabled until connected)
   chatInput.setEnabled(false);
   nameInput.setEnabled(false);
 
-  // Set up event handlers
+  // Setup event handlers
   setupEventHandlers();
+  setupDatabaseEventHandlers();
 
   // Connect to SpacetimeDB
   connectToSpacetimeDB();
+
+  console.log("Application initialized.");
 }
 
 /**
- * Set up event handlers for components
+ * Sets up event listeners for UI component interactions (message sending, name setting).
  */
 function setupEventHandlers() {
-  // Handle chat message submission
-  chatInput.onSubmit(({ text }) => {
-    dbService.sendMessage(text);
+  chatInput.onSubmit((event: MessageSubmitEvent) => {
+    console.log("Chat input submitted:", event.text);
+    dbService.sendMessage(event.text);
   });
 
-  // Handle name submission
-  nameInput.onSubmit(({ name }) => {
-    dbService.setUserName(name);
+  nameInput.onSubmit((event: NameSubmitEvent) => {
+    console.log("Name input submitted:", event.name);
+    dbService.setUserName(event.name);
   });
-
-  // Handle database events
-  setupDatabaseEventHandlers();
 }
 
 /**
- * Set up event handlers for database events
+ * Sets up event listeners for SpacetimeDB events provided by the `dbService`.
+ * Handles connection status changes, user updates, and new messages.
  */
 function setupDatabaseEventHandlers() {
   // Connection events
-  dbService.onConnection((identity) => {
+  dbService.onConnection((identity: Identity) => {
     console.log("Connected to SpacetimeDB");
     connectionStatusElement.textContent = Constants.textLabels.connected;
 
-    // Update UI
+    // Update UI state
     chatInput.setEnabled(true);
     nameInput.setEnabled(true);
-
-    // Update components with identity
-    usersList.setCurrentIdentity(identity);
     chatMessages.setCurrentIdentity(identity);
+    usersList.setCurrentIdentity(identity);
 
-    // Set initial name if available
-    const identityHex = identity.toHexString();
-    const localUser = users.get(identityHex);
-    if (localUser?.name) {
-      nameInput.setValue(localUser.name);
-    }
+    // Populate initial state if needed (e.g., existing users/messages)
+    // This part might need adjustment based on how initial state is handled
   });
 
   dbService.onDisconnect(() => {
     console.log("Disconnected from SpacetimeDB");
     connectionStatusElement.textContent = Constants.textLabels.disconnected;
 
-    // Update UI
+    // Update UI state
     chatInput.setEnabled(false);
     nameInput.setEnabled(false);
-
-    // Clear state
-    users = new Map();
-    playerMessages = new Map();
-
-    // Update components
-    usersList.updateUsers(users);
-    usersList.setCurrentIdentity(null);
     chatMessages.setCurrentIdentity(null);
+    usersList.setCurrentIdentity(null);
+
+    // Clear local state
+    users.clear();
+    playerMessages.clear();
+    usersList.updateUsers(users);
+    // Consider clearing chatMessages display as well
+
+    // Attempt to reconnect after a delay
+    console.log("Attempting to reconnect in 5 seconds...");
+    setTimeout(connectToSpacetimeDB, 5000);
   });
 
-  dbService.onError((error) => {
+  dbService.onError((error: Error) => {
     console.error("SpacetimeDB connection error:", error);
     connectionStatusElement.textContent = `${Constants.textLabels.errorPrefix}${error.message}`;
 
-    // Update UI
+    // Update UI state
     chatInput.setEnabled(false);
     nameInput.setEnabled(false);
   });
 
   // User events
-  dbService.onUserInsert((user) => {
+  dbService.onUserInsert((user: User) => {
     const userIdHex = user.identity.toHexString();
     console.log(
       `User inserted: ${userIdHex.substring(0, Constants.identity.shortLength)}`
@@ -138,10 +185,10 @@ function setupDatabaseEventHandlers() {
 
     // Update components
     usersList.updateUsers(users);
-    chatMessages.setUsers(users);
+    chatMessages.setUsers(users); // Ensure chat messages can resolve names
   });
 
-  dbService.onUserUpdate((oldUser, newUser) => {
+  dbService.onUserUpdate((oldUser: User, newUser: User) => {
     const oldUserIdHex = oldUser.identity.toHexString();
     const newUserIdHex = newUser.identity.toHexString();
     console.log(
@@ -154,6 +201,8 @@ function setupDatabaseEventHandlers() {
     // Update users map
     const nextUsers = new Map(users);
     nextUsers.set(newUserIdHex, newUser);
+    // If identity somehow changed (shouldn't typically happen for updates),
+    // remove the old one.
     if (oldUserIdHex !== newUserIdHex) {
       nextUsers.delete(oldUserIdHex);
     }
@@ -164,7 +213,7 @@ function setupDatabaseEventHandlers() {
     chatMessages.setUsers(users);
   });
 
-  dbService.onUserDelete((user) => {
+  dbService.onUserDelete((user: User) => {
     const userIdHex = user.identity.toHexString();
     console.log(
       `User deleted: ${userIdHex.substring(0, Constants.identity.shortLength)}`
@@ -182,31 +231,43 @@ function setupDatabaseEventHandlers() {
 
   // Message events
   dbService.onMessageInsert((message) => {
-    if (!message.sender) return;
+    if (!message.sender) {
+      console.warn("Received message without sender identity.");
+      return;
+    }
 
     const senderHex = message.sender.toHexString();
+    // Convert SpacetimeDB Timestamp (microseconds) to JS Timestamp (milliseconds)
     const messageTimestamp = message.sent
       ? Math.floor(Number(message.sent.microsSinceUnixEpoch) / 1000)
-      : Date.now();
+      : Date.now(); // Fallback to current time if sent timestamp is missing
+
+    console.log(
+      `Message received from ${senderHex.substring(
+        0,
+        Constants.identity.shortLength
+      )} at ${new Date(messageTimestamp).toLocaleTimeString()}: ${message.text}`
+    );
 
     const newMessage = {
       text: message.text,
       timestamp: messageTimestamp,
     };
 
-    // Store in message history
+    // Store in message history (optional, could be simplified if not needed)
     const nextMessages = new Map(playerMessages);
     const currentMessages = nextMessages.get(senderHex) || [];
-    nextMessages.set(senderHex, [...currentMessages, newMessage]); // Keep all messages
+    nextMessages.set(senderHex, [...currentMessages, newMessage]);
     playerMessages = nextMessages;
 
-    // Add to chat
+    // Add to chat display
     chatMessages.addMessage(senderHex, message.text, messageTimestamp);
   });
 }
 
 /**
- * Connect to SpacetimeDB
+ * Initiates the connection process using the `dbService`.
+ * Updates the connection status UI element.
  */
 function connectToSpacetimeDB() {
   console.log("Connecting to SpacetimeDB...");
@@ -214,5 +275,5 @@ function connectToSpacetimeDB() {
   dbService.connect();
 }
 
-// Initialize the application when the DOM is ready
+// --- Application Start ---
 document.addEventListener("DOMContentLoaded", initializeApp);

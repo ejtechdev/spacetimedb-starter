@@ -1,3 +1,5 @@
+//! Module containing logic related to chat messages.
+
 // Module declarations
 pub mod models;
 pub mod reducers;

@@ -1,3 +1,6 @@
+//! Main library entry point for the SpacetimeDB chat server module.
+//! Defines the database schema and registers reducers.
+
 // Define the module structure
 pub mod modules;
 

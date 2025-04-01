@@ -1,3 +1,5 @@
+//! Module containing logic for scheduled events and example bots.
+
 // Module declarations
 pub mod models;
 pub mod reducers;

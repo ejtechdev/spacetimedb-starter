@@ -1,8 +1,21 @@
+//!
+//! Contains reducers related to scheduled tasks, including initialization and execution.
+
 use crate::modules::message::reducers::send_message;
 use crate::modules::scheduler::models::send_message_schedule;
 use crate::modules::scheduler::models::SendMessageSchedule;
 use spacetimedb::{ReducerContext, Table, TimeDuration, Timestamp};
 
+/// Reducer called by the SpacetimeDB scheduler based on `SendMessageSchedule` table entries.
+/// Sends a message using the text provided in the schedule arguments.
+///
+/// # Arguments
+/// * `ctx` - The reducer context, providing information like timestamp and sender identity.
+/// * `arg` - The `SendMessageSchedule` data associated with the triggered schedule.
+///
+/// # Returns
+/// * `Ok(())` on success.
+/// * `Err(String)` if sending the message fails (error is logged).
 #[spacetimedb::reducer]
 pub fn send_scheduled_message(
     ctx: &ReducerContext,
@@ -19,7 +32,16 @@ pub fn send_scheduled_message(
     Ok(())
 }
 
-// An example of a scheduled reducer that can only be called via scheduling.
+/// An example of a reducer that can *only* be invoked via scheduling, not by clients.
+/// Checks if the sender identity matches the module's own identity.
+///
+/// # Arguments
+/// * `ctx` - The reducer context.
+/// * `_args` - The `SendMessageSchedule` arguments (unused in this example).
+///
+/// # Returns
+/// * `Ok(())` if called by the scheduler.
+/// * `Err(String)` if called directly by a client.
 #[spacetimedb::reducer]
 pub fn scheduled_only_message(
     ctx: &ReducerContext,
@@ -34,8 +56,12 @@ pub fn scheduled_only_message(
     Ok(())
 }
 
-// Now, we want to actually start scheduling reducers.
-// It's convenient to do this inside the `init` reducer.
+/// Initialization reducer for the scheduler module.
+/// Called once when the module is published.
+/// Sets up initial example schedules (one-time and repeating).
+///
+/// # Arguments
+/// * `ctx` - The reducer context.
 #[spacetimedb::reducer(init)]
 pub fn init(ctx: &ReducerContext) {
     let current_time = ctx.timestamp;
