@@ -174,9 +174,6 @@ function setupDatabaseEventHandlers() {
   // User events
   dbService.onUserInsert((user: User) => {
     const userIdHex = user.identity.toHexString();
-    console.log(
-      `User inserted: ${userIdHex.substring(0, Constants.identity.shortLength)}`
-    );
 
     // Update users map
     const nextUsers = new Map(users);
@@ -241,13 +238,6 @@ function setupDatabaseEventHandlers() {
     const messageTimestamp = message.sent
       ? Math.floor(Number(message.sent.microsSinceUnixEpoch) / 1000)
       : Date.now(); // Fallback to current time if sent timestamp is missing
-
-    console.log(
-      `Message received from ${senderHex.substring(
-        0,
-        Constants.identity.shortLength
-      )} at ${new Date(messageTimestamp).toLocaleTimeString()}: ${message.text}`
-    );
 
     const newMessage = {
       text: message.text,
