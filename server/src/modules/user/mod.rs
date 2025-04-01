@@ -4,4 +4,4 @@ pub mod reducers;
 
 // Selective re-exports from this module
 pub use models::User;
-pub use reducers::{set_name, move_player, identity_connected, identity_disconnected};
+pub use reducers::{set_name, identity_connected, identity_disconnected};

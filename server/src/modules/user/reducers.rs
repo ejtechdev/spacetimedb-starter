@@ -25,29 +25,6 @@ pub fn set_name(ctx: &ReducerContext, name: String) -> Result<(), String> {
     }
 }
 
-#[spacetimedb::reducer]
-pub fn move_player(ctx: &ReducerContext, x: f32, y: f32) -> Result<(), String> {
-    if let Some(user) = ctx.db.user().identity().find(ctx.sender) {
-        // Only allow movement if the user is online
-        if !user.online {
-            return Err("Cannot move: User is not connected".to_string());
-        }
-
-        // Update the user's position and last_active time
-        ctx.db.user().identity().update(User {
-            x,
-            y,
-            last_active: ctx.timestamp,
-            ..user
-        });
-
-        Ok(())
-    } else {
-        // It shouldn't be possible to move if no user row exists
-        Err("Cannot move unknown user".to_string())
-    }
-}
-
 #[spacetimedb::reducer(client_connected)]
 pub fn identity_connected(ctx: &ReducerContext) {
     if let Some(user) = ctx.db.user().identity().find(ctx.sender) {
@@ -64,8 +41,6 @@ pub fn identity_connected(ctx: &ReducerContext) {
             name: None,
             identity: ctx.sender,
             online: true,
-            x: 0.0,
-            y: 0.0,
             last_active: ctx.timestamp,
         });
     }
