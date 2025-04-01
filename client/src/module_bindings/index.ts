@@ -70,7 +70,7 @@ const REMOTE_MODULE = {
     send_message_schedule: {
       tableName: "send_message_schedule",
       rowType: SendMessageSchedule.getTypeScriptAlgebraicType(),
-      primaryKey: "scheduled_id",
+      primaryKey: "scheduledId",
     },
     user: {
       tableName: "user",
