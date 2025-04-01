@@ -234,7 +234,6 @@ function setupDatabaseEventHandlers() {
     }
 
     const senderHex = message.sender.toHexString();
-    // Convert SpacetimeDB Timestamp (microseconds) to JS Timestamp (milliseconds)
     const messageTimestamp = message.sent
       ? Math.floor(Number(message.sent.microsSinceUnixEpoch) / 1000)
       : Date.now(); // Fallback to current time if sent timestamp is missing
@@ -251,7 +250,11 @@ function setupDatabaseEventHandlers() {
     playerMessages = nextMessages;
 
     // Add to chat display
-    chatMessages.addMessage(senderHex, message.text, messageTimestamp);
+    chatMessages.addMessage({
+      senderIdentity: senderHex,
+      text: message.text,
+      timestamp: messageTimestamp,
+    });
   });
 }
 

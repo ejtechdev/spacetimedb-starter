@@ -6,7 +6,7 @@ interface ChatMessage {
   senderIdentity: string;
   text: string;
   timestamp: number;
-  element: HTMLElement;
+  element?: HTMLElement;
 }
 
 /**
@@ -23,11 +23,11 @@ export class ChatMessages {
    * @param containerId ID of the container element
    */
   constructor(containerId: string) {
-    const element = document.getElementById(containerId);
-    if (!element) {
-      throw new Error(`Element with ID "${containerId}" not found`);
+    const container = document.getElementById(containerId);
+    if (!container) {
+      throw new Error(`Container with id ${containerId} not found`);
     }
-    this.container = element;
+    this.container = container;
   }
 
   /**
@@ -58,15 +58,9 @@ export class ChatMessages {
 
   /**
    * Add a message to the chat
-   * @param senderIdentity Sender's identity string
-   * @param text Message text
-   * @param timestamp Optional timestamp (defaults to current time if not provided)
+   * @param {ChatMessage} message The message to add
    */
-  public addMessage(
-    senderIdentity: string,
-    text: string,
-    timestamp?: number
-  ): void {
+  public addMessage({ senderIdentity, text, timestamp }: ChatMessage): void {
     // Create message element
     const messageEl = document.createElement("div");
     const isCurrentUser =

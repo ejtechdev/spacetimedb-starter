@@ -69,9 +69,9 @@ pub fn init(ctx: &ReducerContext) {
     // Example of how to get the current time in microseconds since unix epoch.
     let _current_time_micros = current_time.to_micros_since_unix_epoch();
 
-    let ten_seconds = TimeDuration::from_micros(10_000_000);
+    let delay_duration = TimeDuration::from_micros(10_000_000);
 
-    let future_timestamp: Timestamp = current_time + ten_seconds;
+    let future_timestamp: Timestamp = current_time + delay_duration;
     ctx.db.send_message_schedule().insert(SendMessageSchedule {
         scheduled_id: 0, // auto-incremented
         text: "I'm a bot sending a message one time".to_string(),
@@ -81,10 +81,12 @@ pub fn init(ctx: &ReducerContext) {
         scheduled_at: future_timestamp.into(),
     });
 
-    let loop_duration: TimeDuration = ten_seconds;
-    ctx.db.send_message_schedule().insert(SendMessageSchedule {
+    let loop_time_in_seconds = 60;
+    let loop_time = TimeDuration::from_micros(loop_time_in_seconds * 1_000_000);
+    let loop_duration: TimeDuration = loop_time;
+        ctx.db.send_message_schedule().insert(SendMessageSchedule {
         scheduled_id: 0, // auto-incremented
-        text: "I'm a bot sending a message every 10 seconds".to_string(),
+        text: format!("I'm a bot sending a message every {} seconds", loop_time_in_seconds),
 
         // Creating a `ScheduleAt` from a `Duration` results in the reducer
         // being called in a loop, once every `loop_duration`.
