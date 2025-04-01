@@ -1,9 +1,6 @@
 //! Contains reducers related to chat messages.
-
-use crate::modules::message::models::message;
-use crate::modules::message::models::Message;
-use spacetimedb::ReducerContext;
-use spacetimedb::Table;
+use crate::modules::message::models::{message, Message};
+use spacetimedb::{ReducerContext, Table};
 
 /// Validates the message text.
 /// Ensures messages are not empty.
