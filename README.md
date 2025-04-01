@@ -231,8 +231,8 @@ Update the `send_message` reducer and add new reducers for toggling reactions in
 
 ```rust
 // server/src/modules/message/reducers.rs
-// ... existing use declaration(s) ...
-use crate::modules::message::models::Reaction;
+// add to the use declarations
+use crate::modules::message::models::{message, Message, reaction, Reaction};
 use crate::modules::message::types::ReactionEmoji;
 
 // ... existing code ...
@@ -325,15 +325,14 @@ type ReactionDeleteCallback = (reaction: Reaction) => void;
 class SpacetimeDBService {
   // ... existing code ...
 
-  // Add event handler arrays
+  // Add event handler arrays and map of message IDs
   private onReactionInsertCallbacks: ReactionInsertCallback[] = [];
   private onReactionUpdateCallbacks: ReactionUpdateCallback[] = [];
   private onReactionDeleteCallbacks: ReactionDeleteCallback[] = [];
 
-  // ... existing code ...
-
-  // Map of message IDs to their reactions
   private messageReactions: Map<bigint, Reaction[]> = new Map();
+
+  // existing  code, add this somewhere between functions
 
   /**
    * Calls the `toggleReaction` reducer on the SpacetimeDB module.
@@ -353,6 +352,21 @@ class SpacetimeDBService {
     } catch (e) {
       console.error("Error calling toggleReaction reducer:", e);
     }
+  }
+
+    /**
+   * Retrieves all reactions for a given message ID.
+   * @param {bigint} messageId - The ID of the message to retrieve reactions for.
+   * @returns {Reaction[]} An array of Reaction objects.
+   */
+  public getReactions(messageId: bigint): Reaction[] {
+    if (!this.isConnected || !this.connection) {
+      console.warn("Cannot get reactions: Not connected");
+      return [];
+    }
+    return Array.from(this.connection.db.reaction.iter()).filter(
+      (reaction) => reaction.messageId === messageId
+    );
   }
 
   /**
@@ -454,7 +468,7 @@ class SpacetimeDBService {
   ): void {
     // ... existing code ...
 
-    // Update subscription to include reaction table
+    // update subscription to include reaction table
     conn
       .subscriptionBuilder()
       .subscribe([
@@ -504,7 +518,8 @@ class SpacetimeDBService {
   private handleReactionDelete(_ctx: EventContext, reaction: Reaction): void {
     this.onReactionDeleteCallbacks.forEach((callback) => callback(reaction));
   }
-}
+
+
 
 // ... existing code ...
 ```
@@ -516,31 +531,9 @@ This update to the `SpacetimeDBService` allows our client application to:
 3. Get reactions on messages by iterating over the client cache
 4. Listen for reaction changes (insertions, updates, deletions)
 
-#### 6. Add Client-Side Event Handlers (TypeScript)
+We still need to actually add the Components and UI to do perform these calls.
 
-Update the `setupDatabaseEventHandlers` function in `client/src/main.ts` to handle reaction events:
-
-```typescript
-// ... existing code ...
-
-// Reaction events
-dbService.onReactionInsert((reaction) => {
-  console.log("Reaction added:", reaction);
-  // The ChatMessages component will handle the update through its subscription
-});
-
-dbService.onReactionUpdate((oldReaction, newReaction) => {
-  console.log("Reaction updated:", { old: oldReaction, new: newReaction });
-  // The ChatMessages component will handle the update through its subscription
-});
-
-dbService.onReactionDelete((reaction) => {
-  console.log("Reaction deleted:", reaction);
-  // The ChatMessages component will handle the update through its subscription
-});
-```
-
-#### 7. Add Emoji Picker UI (TypeScript/CSS)
+#### 6. Add Emoji Picker UI (TypeScript/CSS)
 
 Create a new `ReactionPicker` component in `client/src/components/ReactionPicker.ts`:
 
@@ -549,16 +542,13 @@ import { ReactionEmoji } from "../module_bindings";
 
 export class ReactionPicker {
   private element: HTMLElement;
-  private messageId: bigint;
   private onClose: () => void;
   private onReactionSelect: (emoji: ReactionEmoji) => void;
 
   constructor(
-    messageId: bigint,
     onClose: () => void,
     onReactionSelect: (emoji: ReactionEmoji) => void
   ) {
-    this.messageId = messageId;
     this.onClose = onClose;
     this.onReactionSelect = onReactionSelect;
     this.element = this.createPicker();
@@ -568,7 +558,7 @@ export class ReactionPicker {
     const pickerEl = document.createElement("div");
     pickerEl.className = "reaction-picker";
 
-    const emojis: { emoji: string; type: ReactionEmoji }[] = [
+    const reactions: { emoji: string; type: ReactionEmoji }[] = [
       { emoji: "👍", type: { tag: "ThumbsUp" } },
       { emoji: "❤️", type: { tag: "Heart" } },
       { emoji: "😂", type: { tag: "Laugh" } },
@@ -577,9 +567,9 @@ export class ReactionPicker {
       { emoji: "🚀", type: { tag: "Rocket" } },
     ];
 
-    emojis.forEach(({ emoji, type }) => {
+    reactions.forEach(({ emoji, type }) => {
       const button = document.createElement("button");
-      button.className = "emoji-option";
+      button.className = "reaction-option";
       button.textContent = emoji;
       button.addEventListener("click", () => {
         this.onReactionSelect(type);
@@ -610,12 +600,29 @@ export class ReactionPicker {
     this.element.remove();
     this.onClose();
   }
+
+  public getElement(): HTMLElement {
+    return this.element;
+  }
 }
 ```
 
-Add the emoji picker styles to `client/src/styles/main.css`:
+Increase the message style and add emoji picker styles to `client/src/styles/main.css`:
 
 ```css
+// ... this already exists ...
+.message {
+  padding: 10px 14px;
+  margin-bottom: 32px; // update this
+  border-radius: 12px;
+  background-color: #f1f1f1;
+  word-wrap: break-word;
+  max-width: 80%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  align-self: flex-start;
+  position: relative; // add this
+}
+
 .reaction-button {
   position: absolute;
   right: 8px;
@@ -658,7 +665,7 @@ Add the emoji picker styles to `client/src/styles/main.css`:
   animation: fadeIn 0.2s ease-out;
 }
 
-.emoji-option {
+.reaction-option {
   padding: 8px;
   border: none;
   background: none;
@@ -672,7 +679,7 @@ Add the emoji picker styles to `client/src/styles/main.css`:
   color: inherit;
 }
 
-.emoji-option:hover {
+.reaction-option:hover {
   background-color: rgba(0, 0, 0, 0.1);
   transform: scale(1.1);
 }
@@ -680,9 +687,13 @@ Add the emoji picker styles to `client/src/styles/main.css`:
 
 #### 8. Update ChatMessages Component (TypeScript)
 
-Update the `ChatMessages` component in `client/src/components/ChatMessages.ts`:
+Update the `ChatMessages` component in `client/src/components/ChatMessages.ts` to add all our new fields and reaction related code:
 
 ```typescript
+// update imports to include the newly generated types and component
+import { Reaction, ReactionEmoji, User } from "../module_bindings";
+import { ReactionPicker } from "./ReactionPicker";
+
 interface ChatMessage {
   messageId: bigint;
   senderIdentity: string;
@@ -706,15 +717,7 @@ export class ChatMessages {
   private reactionToggleCallbacks: ((event: ReactionToggleEvent) => void)[] =
     [];
 
-  // .. existing code ..
-
-  constructor(containerId: string) {
-    const container = document.getElementById(containerId);
-    if (!container) {
-      throw new Error(`Container with id ${containerId} not found`);
-    }
-    this.container = container;
-  }
+  // ... existing code ...
 
   /**
    * Register a callback for reaction toggle events
@@ -725,6 +728,9 @@ export class ChatMessages {
     this.reactionToggleCallbacks.push(callback);
   }
 
+  // ... existing code ...
+
+  // update our addMessage for all the new fields and looks
   public addMessage({
     messageId,
     senderIdentity,
@@ -759,9 +765,6 @@ export class ChatMessages {
       <div class="reactions"></div>
     `;
 
-    // .. existing code ..
-
-    // Add reaction button click handler
     const reactionButton = messageEl.querySelector(
       ".reaction-button"
     ) as HTMLButtonElement;
@@ -770,11 +773,7 @@ export class ChatMessages {
       this.showReactionPicker(messageEl, messageId);
     });
 
-    // Add to DOM
-    this.container.appendChild(messageEl);
-
-    // Auto-scroll to bottom
-    this.scrollToBottom();
+    // ... existing code ...
 
     // Store message data
     const message: ChatMessage = {
@@ -811,7 +810,6 @@ export class ChatMessages {
 
     // Create and show new reaction picker
     this.activeReactionPicker = new ReactionPicker(
-      messageId,
       () => {
         this.activeReactionPicker = null;
       },
@@ -883,7 +881,8 @@ export class ChatMessages {
     };
     return emojiMap[tag] || "❓";
   }
-}
+
+  // ... existing code ...
 ```
 
 Add the following styles to `client/src/styles/main.css`:
@@ -922,6 +921,49 @@ Add the following styles to `client/src/styles/main.css`:
   color: var(--text-secondary);
   font-size: 0.9em;
 }
+```
+
+#### 9. Update the main file (TypeScript)
+
+Finally, we need to actually update our `src/services/main.ts` file to tie it all together:
+
+```typescript
+// Message events
+dbService.onMessageInsert((message) => {
+  // ... existing code ...
+  // Get initial reactions
+  const reactions = dbService.getReactions(message.messageId);
+
+  // Add to chat display
+  chatMessages.addMessage({
+    messageId: message.messageId,
+    senderIdentity: senderHex,
+    text: message.text,
+    timestamp: messageTimestamp,
+    reactions,
+  });
+
+  // Subscribe to reaction updates for this message
+  dbService.subscribeToMessageReactions(message.messageId, (reactions) => {
+    chatMessages.updateMessageReactions(message.messageId, reactions);
+  });
+});
+
+// Reaction events
+dbService.onReactionInsert((reaction) => {
+  console.log("Reaction added:", reaction);
+  // The ChatMessages component will handle the update through its subscription
+});
+
+dbService.onReactionUpdate((oldReaction, newReaction) => {
+  console.log("Reaction updated:", { old: oldReaction, new: newReaction });
+  // The ChatMessages component will handle the update through its subscription
+});
+
+dbService.onReactionDelete((reaction) => {
+  console.log("Reaction deleted:", reaction);
+  // The ChatMessages component will handle the update through its subscription
+});
 ```
 
 This implementation provides:
