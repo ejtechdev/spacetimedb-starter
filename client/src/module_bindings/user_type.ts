@@ -6,17 +6,35 @@
 // @ts-nocheck
 import {
   AlgebraicType,
+  AlgebraicValue,
   BinaryReader,
   BinaryWriter,
+  CallReducerFlags,
+  ConnectionId,
+  DbConnectionBuilder,
+  DbConnectionImpl,
+  DbContext,
+  ErrorContextInterface,
+  Event,
+  EventContextInterface,
   Identity,
+  ProductType,
   ProductTypeElement,
+  ReducerEventContextInterface,
+  SubscriptionBuilderImpl,
+  SubscriptionEventContextInterface,
+  SumType,
+  SumTypeVariant,
+  TableCache,
+  TimeDuration,
   Timestamp,
+  deepEqual,
 } from "@clockworklabs/spacetimedb-sdk";
 export type User = {
-  identity: Identity;
-  name: string | undefined;
-  online: boolean;
-  lastActive: Timestamp;
+  identity: Identity,
+  name: string | undefined,
+  online: boolean,
+  lastActive: Timestamp,
 };
 
 /**
@@ -24,16 +42,13 @@ export type User = {
  */
 export namespace User {
   /**
-   * A function which returns this type represented as an AlgebraicType.
-   * This function is derived from the AlgebraicType used to generate this type.
-   */
+  * A function which returns this type represented as an AlgebraicType.
+  * This function is derived from the AlgebraicType used to generate this type.
+  */
   export function getTypeScriptAlgebraicType(): AlgebraicType {
     return AlgebraicType.createProductType([
       new ProductTypeElement("identity", AlgebraicType.createIdentityType()),
-      new ProductTypeElement(
-        "name",
-        AlgebraicType.createOptionType(AlgebraicType.createStringType())
-      ),
+      new ProductTypeElement("name", AlgebraicType.createOptionType(AlgebraicType.createStringType())),
       new ProductTypeElement("online", AlgebraicType.createBoolType()),
       new ProductTypeElement("lastActive", AlgebraicType.createTimestampType()),
     ]);
@@ -46,4 +61,7 @@ export namespace User {
   export function deserialize(reader: BinaryReader): User {
     return User.getTypeScriptAlgebraicType().deserialize(reader);
   }
+
 }
+
+
