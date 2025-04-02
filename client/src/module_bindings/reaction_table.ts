@@ -30,23 +30,25 @@ import {
   Timestamp,
   deepEqual,
 } from "@clockworklabs/spacetimedb-sdk";
-import { Message } from "./message_type";
+import { Reaction } from "./reaction_type";
+import { ReactionEmoji as __ReactionEmoji } from "./reaction_emoji_type";
+
 import { EventContext, Reducer, RemoteReducers, RemoteTables } from ".";
 
 /**
- * Table handle for the table `message`.
+ * Table handle for the table `reaction`.
  *
- * Obtain a handle from the [`message`] property on [`RemoteTables`],
- * like `ctx.db.message`.
+ * Obtain a handle from the [`reaction`] property on [`RemoteTables`],
+ * like `ctx.db.reaction`.
  *
  * Users are encouraged not to explicitly reference this type,
  * but to directly chain method calls,
- * like `ctx.db.message.on_insert(...)`.
+ * like `ctx.db.reaction.on_insert(...)`.
  */
-export class MessageTableHandle {
-  tableCache: TableCache<Message>;
+export class ReactionTableHandle {
+  tableCache: TableCache<Reaction>;
 
-  constructor(tableCache: TableCache<Message>) {
+  constructor(tableCache: TableCache<Reaction>) {
     this.tableCache = tableCache;
   }
 
@@ -54,53 +56,53 @@ export class MessageTableHandle {
     return this.tableCache.count();
   }
 
-  iter(): Iterable<Message> {
+  iter(): Iterable<Reaction> {
     return this.tableCache.iter();
   }
   /**
-   * Access to the `message_id` unique index on the table `message`,
+   * Access to the `reaction_id` unique index on the table `reaction`,
    * which allows point queries on the field of the same name
-   * via the [`MessageMessageIdUnique.find`] method.
+   * via the [`ReactionReactionIdUnique.find`] method.
    *
    * Users are encouraged not to explicitly reference this type,
    * but to directly chain method calls,
-   * like `ctx.db.message.message_id().find(...)`.
+   * like `ctx.db.reaction.reaction_id().find(...)`.
    *
-   * Get a handle on the `message_id` unique index on the table `message`.
+   * Get a handle on the `reaction_id` unique index on the table `reaction`.
    */
-  message_id = {
-    // Find the subscribed row whose `message_id` column value is equal to `col_val`,
+  reaction_id = {
+    // Find the subscribed row whose `reaction_id` column value is equal to `col_val`,
     // if such a row is present in the client cache.
-    find: (col_val: bigint): Message | undefined => {
+    find: (col_val: bigint): Reaction | undefined => {
       for (let row of this.tableCache.iter()) {
-        if (deepEqual(row.message_id, col_val)) {
+        if (deepEqual(row.reaction_id, col_val)) {
           return row;
         }
       }
     },
   };
 
-  onInsert = (cb: (ctx: EventContext, row: Message) => void) => {
+  onInsert = (cb: (ctx: EventContext, row: Reaction) => void) => {
     return this.tableCache.onInsert(cb);
   }
 
-  removeOnInsert = (cb: (ctx: EventContext, row: Message) => void) => {
+  removeOnInsert = (cb: (ctx: EventContext, row: Reaction) => void) => {
     return this.tableCache.removeOnInsert(cb);
   }
 
-  onDelete = (cb: (ctx: EventContext, row: Message) => void) => {
+  onDelete = (cb: (ctx: EventContext, row: Reaction) => void) => {
     return this.tableCache.onDelete(cb);
   }
 
-  removeOnDelete = (cb: (ctx: EventContext, row: Message) => void) => {
+  removeOnDelete = (cb: (ctx: EventContext, row: Reaction) => void) => {
     return this.tableCache.removeOnDelete(cb);
   }
 
   // Updates are only defined for tables with primary keys.
-  onUpdate = (cb: (ctx: EventContext, oldRow: Message, newRow: Message) => void) => {
+  onUpdate = (cb: (ctx: EventContext, oldRow: Reaction, newRow: Reaction) => void) => {
     return this.tableCache.onUpdate(cb);
   }
 
-  removeOnUpdate = (cb: (ctx: EventContext, onRow: Message, newRow: Message) => void) => {
+  removeOnUpdate = (cb: (ctx: EventContext, onRow: Reaction, newRow: Reaction) => void) => {
     return this.tableCache.removeOnUpdate(cb);
   }}

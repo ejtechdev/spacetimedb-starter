@@ -194,13 +194,14 @@ main {
 
 .message {
   padding: 10px 14px;
-  margin-bottom: 8px;
+  margin-bottom: 32px;
   border-radius: 12px;
   background-color: #f1f1f1;
   word-wrap: break-word;
   max-width: 80%;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   align-self: flex-start;
+  position: relative;
 }
 
 .message .timestamp {
@@ -350,4 +351,99 @@ button:disabled {
   .message {
     max-width: 85%;
   }
+}
+
+.reaction-button {
+  position: absolute;
+  right: 8px;
+  bottom: -24px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+  font-size: 0.9em;
+  z-index: 10;
+  color: var(--text-secondary);
+}
+
+.reaction-button:hover {
+  opacity: 1;
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.reaction-picker {
+  position: absolute;
+  right: 0;
+  bottom: -120px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  box-shadow: var(--shadow-lg);
+  z-index: 1000;
+  min-width: 120px;
+  transform: translateY(0);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.reaction-option {
+  padding: 8px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 1.2em;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+}
+
+.reaction-option:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+  transform: scale(1.1);
+}
+
+.reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+.reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px;
+  border-radius: 12px;
+  background-color: var(--bg-secondary);
+  cursor: pointer;
+  transition: background-color 0.2s;
+  font-size: 0.9em;
+  border: 1px solid var(--border-color);
+}
+
+.reaction:hover {
+  background-color: var(--bg-hover);
+}
+
+.reaction-emoji {
+  font-size: 1.1em;
+}
+
+.reaction-count {
+  color: var(--text-secondary);
+  font-size: 0.9em;
 }

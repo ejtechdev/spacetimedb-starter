@@ -44,10 +44,14 @@ import { SendScheduledMessage } from "./send_scheduled_message_reducer.ts";
 export { SendScheduledMessage };
 import { SetName } from "./set_name_reducer.ts";
 export { SetName };
+import { ToggleReaction } from "./toggle_reaction_reducer.ts";
+export { ToggleReaction };
 
 // Import and reexport all table handle types
 import { MessageTableHandle } from "./message_table.ts";
 export { MessageTableHandle };
+import { ReactionTableHandle } from "./reaction_table.ts";
+export { ReactionTableHandle };
 import { SendMessageScheduleTableHandle } from "./send_message_schedule_table.ts";
 export { SendMessageScheduleTableHandle };
 import { UserTableHandle } from "./user_table.ts";
@@ -56,6 +60,10 @@ export { UserTableHandle };
 // Import and reexport all types
 import { Message } from "./message_type.ts";
 export { Message };
+import { Reaction } from "./reaction_type.ts";
+export { Reaction };
+import { ReactionEmoji } from "./reaction_emoji_type.ts";
+export { ReactionEmoji };
 import { SendMessageSchedule } from "./send_message_schedule_type.ts";
 export { SendMessageSchedule };
 import { User } from "./user_type.ts";
@@ -66,6 +74,12 @@ const REMOTE_MODULE = {
     message: {
       tableName: "message",
       rowType: Message.getTypeScriptAlgebraicType(),
+      primaryKey: "messageId",
+    },
+    reaction: {
+      tableName: "reaction",
+      rowType: Reaction.getTypeScriptAlgebraicType(),
+      primaryKey: "reactionId",
     },
     send_message_schedule: {
       tableName: "send_message_schedule",
@@ -103,6 +117,10 @@ const REMOTE_MODULE = {
       reducerName: "set_name",
       argsType: SetName.getTypeScriptAlgebraicType(),
     },
+    toggle_reaction: {
+      reducerName: "toggle_reaction",
+      argsType: ToggleReaction.getTypeScriptAlgebraicType(),
+    },
   },
   // Constructors which are used by the DbConnectionImpl to
   // extract type information from the generated RemoteModule.
@@ -136,6 +154,7 @@ export type Reducer = never
 | { name: "SendMessage", args: SendMessage }
 | { name: "SendScheduledMessage", args: SendScheduledMessage }
 | { name: "SetName", args: SetName }
+| { name: "ToggleReaction", args: ToggleReaction }
 ;
 
 export class RemoteReducers {
@@ -221,6 +240,22 @@ export class RemoteReducers {
     this.connection.offReducer("set_name", callback);
   }
 
+  toggleReaction(messageId: bigint, emoji: ReactionEmoji) {
+    const __args = { messageId, emoji };
+    let __writer = new BinaryWriter(1024);
+    ToggleReaction.getTypeScriptAlgebraicType().serialize(__writer, __args);
+    let __argsBuffer = __writer.getBuffer();
+    this.connection.callReducer("toggle_reaction", __argsBuffer, this.setCallReducerFlags.toggleReactionFlags);
+  }
+
+  onToggleReaction(callback: (ctx: ReducerEventContext, messageId: bigint, emoji: ReactionEmoji) => void) {
+    this.connection.onReducer("toggle_reaction", callback);
+  }
+
+  removeOnToggleReaction(callback: (ctx: ReducerEventContext, messageId: bigint, emoji: ReactionEmoji) => void) {
+    this.connection.offReducer("toggle_reaction", callback);
+  }
+
 }
 
 export class SetReducerFlags {
@@ -244,6 +279,11 @@ export class SetReducerFlags {
     this.setNameFlags = flags;
   }
 
+  toggleReactionFlags: CallReducerFlags = 'FullUpdate';
+  toggleReaction(flags: CallReducerFlags) {
+    this.toggleReactionFlags = flags;
+  }
+
 }
 
 export class RemoteTables {
@@ -251,6 +291,10 @@ export class RemoteTables {
 
   get message(): MessageTableHandle {
     return new MessageTableHandle(this.connection.clientCache.getOrCreateTable<Message>(REMOTE_MODULE.tables.message));
+  }
+
+  get reaction(): ReactionTableHandle {
+    return new ReactionTableHandle(this.connection.clientCache.getOrCreateTable<Reaction>(REMOTE_MODULE.tables.reaction));
   }
 
   get sendMessageSchedule(): SendMessageScheduleTableHandle {

@@ -119,6 +119,11 @@ function setupEventHandlers() {
     console.log("Name input submitted:", event.name);
     dbService.setUserName(event.name);
   });
+
+  chatMessages.onReactionToggle((event) => {
+    console.log("Reaction toggle:", event);
+    dbService.toggleReaction(event.messageId, event.emoji);
+  });
 }
 
 /**
@@ -249,12 +254,37 @@ function setupDatabaseEventHandlers() {
     nextMessages.set(senderHex, [...currentMessages, newMessage]);
     playerMessages = nextMessages;
 
+    const reactions = dbService.getReactions(message.messageId);
+
     // Add to chat display
     chatMessages.addMessage({
+      messageId: message.messageId,
       senderIdentity: senderHex,
       text: message.text,
       timestamp: messageTimestamp,
+      reactions,
     });
+
+    // Subscribe to reaction updates for this message
+    dbService.subscribeToMessageReactions(message.messageId, (reactions) => {
+      chatMessages.updateMessageReactions(message.messageId, reactions);
+    });
+  });
+
+  // Reaction events
+  dbService.onReactionInsert((reaction) => {
+    console.log("Reaction added:", reaction);
+    // The ChatMessages component will handle the update through its subscription
+  });
+
+  dbService.onReactionUpdate((oldReaction, newReaction) => {
+    console.log("Reaction updated:", { old: oldReaction, new: newReaction });
+    // The ChatMessages component will handle the update through its subscription
+  });
+
+  dbService.onReactionDelete((reaction) => {
+    console.log("Reaction deleted:", reaction);
+    // The ChatMessages component will handle the update through its subscription
   });
 }
 

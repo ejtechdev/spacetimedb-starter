@@ -30,17 +30,18 @@ import {
   Timestamp,
   deepEqual,
 } from "@clockworklabs/spacetimedb-sdk";
-export type Message = {
+
+import { ReactionEmoji as __ReactionEmoji } from "./reaction_emoji_type";
+
+export type ToggleReaction = {
   messageId: bigint,
-  sender: Identity,
-  sent: Timestamp,
-  text: string,
+  emoji: __ReactionEmoji,
 };
 
 /**
  * A namespace for generated helper functions.
  */
-export namespace Message {
+export namespace ToggleReaction {
   /**
   * A function which returns this type represented as an AlgebraicType.
   * This function is derived from the AlgebraicType used to generate this type.
@@ -48,20 +49,17 @@ export namespace Message {
   export function getTypeScriptAlgebraicType(): AlgebraicType {
     return AlgebraicType.createProductType([
       new ProductTypeElement("messageId", AlgebraicType.createU64Type()),
-      new ProductTypeElement("sender", AlgebraicType.createIdentityType()),
-      new ProductTypeElement("sent", AlgebraicType.createTimestampType()),
-      new ProductTypeElement("text", AlgebraicType.createStringType()),
+      new ProductTypeElement("emoji", __ReactionEmoji.getTypeScriptAlgebraicType()),
     ]);
   }
 
-  export function serialize(writer: BinaryWriter, value: Message): void {
-    Message.getTypeScriptAlgebraicType().serialize(writer, value);
+  export function serialize(writer: BinaryWriter, value: ToggleReaction): void {
+    ToggleReaction.getTypeScriptAlgebraicType().serialize(writer, value);
   }
 
-  export function deserialize(reader: BinaryReader): Message {
-    return Message.getTypeScriptAlgebraicType().deserialize(reader);
+  export function deserialize(reader: BinaryReader): ToggleReaction {
+    return ToggleReaction.getTypeScriptAlgebraicType().deserialize(reader);
   }
 
 }
-
 

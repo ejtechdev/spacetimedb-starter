@@ -194,6 +194,8 @@ Update the `Message` table (adding the `message_id` column) and add a `Reaction`
 use crate::modules::message::types::ReactionEmoji;
 
 // Extend the Message table to add an ID
+#[spacetimedb::table(name = message, public)] // Name defaults to struct name, 'public' visibility assumed
+// Extend the Message table to add an ID
 pub struct Message {
     #[primary_key]
     #[auto_inc] // Auto-incremented message ID
@@ -205,6 +207,7 @@ pub struct Message {
     /// The text content of the message.
     pub text: String,
 }
+
 
 // Add the Reaction table
 

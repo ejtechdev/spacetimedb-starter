@@ -5,6 +5,8 @@ import {
   ErrorContext,
   EventContext,
   Message,
+  Reaction,
+  ReactionEmoji,
   User,
 } from "../module_bindings";
 
@@ -23,6 +25,15 @@ type UserUpdateCallback = (oldUser: User, newUser: User) => void;
 type UserDeleteCallback = (user: User) => void;
 /** Callback function type for new message insertion. */
 type MessageInsertCallback = (message: Message) => void;
+/** Callback function type for new reaction insertion. */
+type ReactionInsertCallback = (reaction: Reaction) => void;
+/** Callback function type for reaction updates. */
+type ReactionUpdateCallback = (
+  oldReaction: Reaction,
+  newReaction: Reaction
+) => void;
+/** Callback function type for reaction deletion. */
+type ReactionDeleteCallback = (reaction: Reaction) => void;
 
 /**
  * @class SpacetimeDBService
@@ -43,6 +54,11 @@ class SpacetimeDBService {
   private onUserUpdateCallbacks: UserUpdateCallback[] = [];
   private onUserDeleteCallbacks: UserDeleteCallback[] = [];
   private onMessageInsertCallbacks: MessageInsertCallback[] = [];
+  private onReactionInsertCallbacks: ReactionInsertCallback[] = [];
+  private onReactionUpdateCallbacks: ReactionUpdateCallback[] = [];
+  private onReactionDeleteCallbacks: ReactionDeleteCallback[] = [];
+
+  private messageReactions: Map<bigint, Reaction[]> = new Map();
 
   /**
    * Initiates a connection to the SpacetimeDB instance specified in the config.
@@ -62,6 +78,130 @@ class SpacetimeDBService {
       .onDisconnect(this.handleDisconnect.bind(this))
       .onConnectError(this.handleError.bind(this))
       .build();
+  }
+
+  /**
+   * Calls the `toggleReaction` reducer on the SpacetimeDB module.
+   * Toggles an emoji reaction on a message (adds or removes it).
+   * Requires an active connection.
+   * @param {bigint} messageId - The ID of the message to react to.
+   * @param {ReactionEmoji} emoji - The emoji reaction to toggle.
+   */
+  public toggleReaction(messageId: bigint, emoji: ReactionEmoji): void {
+    if (!this.isConnected || !this.connection) {
+      console.warn("Cannot toggle reaction: Not connected");
+      return;
+    }
+
+    try {
+      this.connection.reducers.toggleReaction(messageId, emoji);
+    } catch (e) {
+      console.error("Error calling toggleReaction reducer:", e);
+    }
+  }
+
+  /**
+   * Retrieves all reactions for a given message ID.
+   * @param {bigint} messageId - The ID of the message to retrieve reactions for.
+   * @returns {Reaction[]} An array of Reaction objects.
+   */
+  public getMessageReactions(messageId: bigint): Reaction[] {
+    return this.messageReactions.get(messageId) || [];
+  }
+
+  /**
+   * Subscribe to reaction updates for a message
+   */
+  public subscribeToMessageReactions(
+    messageId: bigint,
+    callback: (reactions: Reaction[]) => void
+  ): () => void {
+    // Initial update
+    const reactions = this.getMessageReactions(messageId);
+    callback(reactions);
+
+    // Set up event handlers
+    const insertHandler = (reaction: Reaction) => {
+      if (reaction.messageId === messageId) {
+        const reactions = this.getMessageReactions(messageId);
+        reactions.push(reaction);
+        this.messageReactions.set(messageId, reactions);
+        callback(reactions);
+      }
+    };
+
+    const updateHandler = (_old: Reaction, newReaction: Reaction) => {
+      if (newReaction.messageId === messageId) {
+        const reactions = this.getMessageReactions(messageId);
+        const index = reactions.findIndex(
+          (r) => r.reactionId === newReaction.reactionId
+        );
+        if (index !== -1) {
+          reactions[index] = newReaction;
+          this.messageReactions.set(messageId, reactions);
+          callback(reactions);
+        }
+      }
+    };
+
+    const deleteHandler = (reaction: Reaction) => {
+      if (reaction.messageId === messageId) {
+        const reactions = this.getMessageReactions(messageId);
+        const filtered = reactions.filter(
+          (r) => r.reactionId !== reaction.reactionId
+        );
+        this.messageReactions.set(messageId, filtered);
+        callback(filtered);
+      }
+    };
+
+    // Register handlers
+    this.onReactionInsert(insertHandler);
+    this.onReactionUpdate(updateHandler);
+    this.onReactionDelete(deleteHandler);
+
+    // Return unsubscribe function
+    return () => {
+      this.onReactionInsertCallbacks = this.onReactionInsertCallbacks.filter(
+        (h) => h !== insertHandler
+      );
+      this.onReactionUpdateCallbacks = this.onReactionUpdateCallbacks.filter(
+        (h) => h !== updateHandler
+      );
+      this.onReactionDeleteCallbacks = this.onReactionDeleteCallbacks.filter(
+        (h) => h !== deleteHandler
+      );
+    };
+  }
+
+  /** Registers a callback for Reaction table insertions. */
+  public onReactionInsert(callback: ReactionInsertCallback): void {
+    this.onReactionInsertCallbacks.push(callback);
+  }
+
+  /** Registers a callback for Reaction table updates. */
+  public onReactionUpdate(callback: ReactionUpdateCallback): void {
+    this.onReactionUpdateCallbacks.push(callback);
+  }
+
+  /** Registers a callback for Reaction table deletions. */
+  public onReactionDelete(callback: ReactionDeleteCallback): void {
+    this.onReactionDeleteCallbacks.push(callback);
+  }
+
+  /**
+   * Retrieves all reactions for a given message ID.
+   * @param {bigint} messageId - The ID of the message to retrieve reactions for.
+   * @returns {Reaction[]} An array of Reaction objects.
+   */
+  public getReactions(messageId: bigint): Reaction[] {
+    if (!this.isConnected || !this.connection) {
+      console.warn("Cannot get reactions: Not connected");
+      return [];
+    }
+    return Array.from(this.connection.db.reaction.iter()).filter(
+      (reaction) => reaction.messageId === messageId
+    );
   }
 
   /**
@@ -194,7 +334,11 @@ class SpacetimeDBService {
     // Subscribe to necessary tables
     conn
       .subscriptionBuilder()
-      .subscribe(["SELECT * FROM user", "SELECT * FROM message"]);
+      .subscribe([
+        "SELECT * FROM user",
+        "SELECT * FROM message",
+        "SELECT * FROM reaction",
+      ]);
 
     // Notify listeners
     this.onConnectionCallbacks.forEach((callback) => callback(identity));
@@ -260,9 +404,37 @@ class SpacetimeDBService {
           "Message table not available on connection, cannot attach listeners."
         );
       }
+      if (conn.db?.reaction) {
+        conn.db.reaction.onInsert(this.handleReactionInsert.bind(this));
+        conn.db.reaction.onUpdate(this.handleReactionUpdate.bind(this));
+        conn.db.reaction.onDelete(this.handleReactionDelete.bind(this));
+        console.log("Attached listeners for Reaction table.");
+      } else {
+        console.warn(
+          "Reaction table not available on connection, cannot attach listeners."
+        );
+      }
     } catch (e) {
       console.error("Error registering database event listeners:", e);
     }
+  }
+
+  private handleReactionInsert(_ctx: EventContext, reaction: Reaction): void {
+    this.onReactionInsertCallbacks.forEach((callback) => callback(reaction));
+  }
+
+  private handleReactionUpdate(
+    _ctx: EventContext,
+    oldReaction: Reaction,
+    newReaction: Reaction
+  ): void {
+    this.onReactionUpdateCallbacks.forEach((callback) =>
+      callback(oldReaction, newReaction)
+    );
+  }
+
+  private handleReactionDelete(_ctx: EventContext, reaction: Reaction): void {
+    this.onReactionDeleteCallbacks.forEach((callback) => callback(reaction));
   }
 
   /** Internal handler for User table insertions. Notifies registered callbacks. */
